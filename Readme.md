@@ -18,15 +18,15 @@ UnityHTTPServer is a simple C# http server implementation works under Unity3D.
 ------
 Simply add a GameObject in your scene and add UnityHTTPServer component.
 
-Port: the port you wish to serve the http.
+*Port*: the port you wish to serve the http.
 
-Save Folder: the wwwroot for your files wish to serve via http.
+*Save Folder*: the wwwroot for your files wish to serve via http.
 
-Use StreamingAssetsPath: Toggle this bool will use StreamingAssetsPath to replace the Save Folder.
+*Use StreamingAssetsPath*: Toggle this bool will use StreamingAssetsPath to replace the Save Folder.
 
-Buffer Size: The buffer for your content to serve via http.
+*Buffer Size*: The buffer for your content to serve via http.
 
-Controller: The MonoBehaviour instance to run your WebAPI method.
+*Controller*: The MonoBehaviour instance to run your WebAPI method.
 <img src="Img/01.png">
 
 
@@ -39,6 +39,7 @@ Example: (Use StreamingAssetsPath is on)
 <img src="Img/02.png">
 
 Result:
+
 <img src="Img/03.png">
 
 ## WebAPI method
@@ -56,6 +57,7 @@ On the screenshot we use TestController.cs as an example.
 ------
 
 Example:
+
 ```csharp  
 // Url: http://127.0.0.1:{port}/SimpleMethod
 // change {port} to the port set on your UnityHttpController component
@@ -66,6 +68,7 @@ public void SimpleMethod()
 }
 ```  
 Result:
+
 <img src="Img/05.png">
 
 ### Custom Object
@@ -73,6 +76,7 @@ Result:
 
 In theory, you can return any object which support by json serialize.
 Example: 
+
 ```csharp  
 // Url: http://127.0.0.1:{port}/SimpleStringMethod
 // change {port} to the port set on your UnityHttpController component
@@ -85,7 +89,7 @@ public string[] SimpleStringMethod()
 
 // Url: http://127.0.0.1:{port}/CustomObjectReturnMethod
 // change {port} to the port set on your UnityHttpController component
- public ReturnResult CustomObjectReturnMethod()
+public ReturnResult CustomObjectReturnMethod()
 {
     ReturnResult result = new ReturnResult
     {
@@ -102,6 +106,7 @@ public class ReturnResult
 }
 ```  
 Result:
+
 <img src="Img/08.png">
 
 ### Query parameter
@@ -109,6 +114,7 @@ Result:
 You can also add query parmeter in your Url
 
 Example: 
+
 ```csharp  
 // Url: http://127.0.0.1:{port}/CustomObjectReturnMethodWithQuery?code=1111&msg=wow_it_is_so_cool
 // change {port} to the port set on your UnityHttpController component
@@ -129,6 +135,7 @@ public class ReturnResult
 }
 ```  
 Result:
+
 <img src="Img/09.png">
 
 ### Array Return
@@ -140,6 +147,7 @@ Note: The supportion of array is based on your Json Library, in case I use the L
 Add *UseLitJson* define symbol in your ProjectSetting to use LitJson in Demo project
 
 Example:
+
 ```csharp  
 // Url: http://127.0.0.1:{port}/SimpleStringMethod
 // change {port} to the port set on your UnityHttpController component
