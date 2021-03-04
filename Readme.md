@@ -6,6 +6,7 @@ UnityHTTPServer is a simple C# http server implementation works under Unity3D.
 - Simple file serve via Http
 - Simple route WebAPI in Unity3D
 - Invoke a C# method in Unity3D via Http request
+- Currently, only support ``GET`` Http method
 
 ## Supported Platform
 ------
@@ -17,6 +18,8 @@ UnityHTTPServer is a simple C# http server implementation works under Unity3D.
 
 ## Get Start
 ------
+### Use UnityHTTPServer Component
+
 Simply add a GameObject in your scene and add UnityHTTPServer component.
 
 *Port*: the port you wish to serve the http.
@@ -31,6 +34,16 @@ Simply add a GameObject in your scene and add UnityHTTPServer component.
 
 <img src="Img/01.png">
 
+### Manual usage (Advanced)
+```csharp
+// Create the Http server instance.
+// Server will automatically start once it created.
+// replace {} part with your parameters
+myServer = new SimpleHTTPServer({your path}, {your port}, {your controller}, {your bufferSize});
+
+// Stop the server, remember to call the Stop() method while the application is close.
+myServer.Stop();
+```
 
 ## Serve Files
 ------
@@ -47,12 +60,29 @@ Result:
 
 ## WebAPI method
 ------
-Create a MonoBehaviour and make sure the MonoBehaviour has an instance in scene, it is recommend to attach the MonoBehaviour on same GameObject with UnityHTTPServer.
+When use UnityHTTPServer Component, create a MonoBehaviour and make sure the MonoBehaviour has an instance in scene, it is recommend to attach the MonoBehaviour on same GameObject with UnityHTTPServer.
 
 Then make the MonoBehaviour to the reference on UnityHTTPServer's Controller field.
 
 On the screenshot we use TestController.cs as an example.
 <img src="Img/04.png">
+
+### Json Serialize
+Usually a web api will return a json string as the result, you need to implement the Json Serialize function yourself.
+
+The simplest way is using Unity's JsonUtility (with some limitation).
+Here is the example:
+```csharp
+// Create a http server instance.
+myServer = new SimpleHTTPServer(GetSaveFolderPath, port, controller, bufferSize);
+
+// Regist the OnJsonSerialized delegate to your json implemention.
+// Here, we use the Unity's JsonUtility.
+myServer.OnJsonSerialized += (result) =>
+{
+    return JsonUtility.ToJson(result);
+};
+```
 
 ### Void Method
 ------
@@ -92,6 +122,8 @@ public ReturnResult CustomObjectReturnMethod()
     return result;
 }
 
+//Mark as Serializable to make Unity's JsonUtility works.
+[System.Serializable]
 public class ReturnResult
 {
     public string msg;
@@ -121,6 +153,8 @@ public ReturnResult CustomObjectReturnMethodWithQuery(int code, string msg)
     return result;
 }
 
+//Mark as Serializable to make Unity's JsonUtility works.
+[System.Serializable]
 public class ReturnResult
 {
     public string msg;
@@ -137,7 +171,13 @@ You can invoke a method which return an array result.
 
 Note: The supportion of array is based on your Json Library, in case I use the LitJson library, the array return supportion will break while using Unity's JsonUtility
 
-Add *UseLitJson* define symbol in your ProjectSetting to use LitJson in Demo project
+```csharp
+// A example while using LitJson as the Json Library
+myServer.OnJsonSerialized += (result) =>
+{
+    return LitJson.JsonMapper.ToJson(result);
+};
+```
 
 Example: (In TestController.cs)
 
@@ -170,10 +210,11 @@ SimpleIntMethod
 
 <img src="Img/07.png">
 
+## Troubleshooting
 
 ## TODO
 ------
-- Mutil controller support
-- Correct error handle (return 500 http code)
-- Post support?
+- Multi controller support
+- Correct error handle (eg. return 500 http code)
+- Other Http method support? (eg. POST, HEAD)
 - Https?

@@ -41,6 +41,8 @@ public class TestController : MonoBehaviour
         return result;
     }
 
+    //Mark as Serializable to make Unity's JsonUtility works.
+    [System.Serializable]
     public class ReturnResult
     {
         public string msg;

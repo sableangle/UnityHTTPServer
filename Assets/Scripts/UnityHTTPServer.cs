@@ -43,6 +43,14 @@ public class UnityHTTPServer : MonoBehaviour
     public void StartServer()
     {
         myServer = new SimpleHTTPServer(GetSaveFolderPath, port, controller, bufferSize);
+        myServer.OnJsonSerialized += (result) =>
+        {
+#if UseLitJson
+            return LitJson.JsonMapper.ToJson(result);
+#else
+            return JsonUtility.ToJson(result);
+#endif
+        };
     }
     string GetSaveFolderPath
     {
@@ -85,5 +93,5 @@ public class UnityHTTPServer : MonoBehaviour
     {
         myServer.Stop();
     }
-   
+
 }

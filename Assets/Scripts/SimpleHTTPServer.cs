@@ -12,18 +12,20 @@ using System.Diagnostics;
 using System.Reflection;
 
 public class SimpleHTTPServer
+{
+
+    public Func<object, string> OnJsonSerialized;
+    static int bufferSize = 16;
+    public System.Object _methodController;
+    private readonly string[] _indexFiles =
     {
-        static int bufferSize = 16;
-        public System.Object _methodController;
-        private readonly string[] _indexFiles =
-        {
                     "index.html",
                     "index.htm",
                     "default.html",
                     "default.htm"
             };
 
-        private static IDictionary<string, string> _mimeTypeMappings = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
+    private static IDictionary<string, string> _mimeTypeMappings = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
             {
 			#region extension to MIME type list
 					{ ".asf", "video/x-ms-asf" },
@@ -94,193 +96,214 @@ public class SimpleHTTPServer
                     { ".zip", "application/zip" },
 			#endregion
 			};
-        private Thread _serverThread;
-        private string _rootDirectory;
-        private HttpListener _listener;
-        private int _port;
+    private Thread _serverThread;
+    private string _rootDirectory;
+    private HttpListener _listener;
+    private int _port;
 
-        public int Port
-        {
-            get { return _port; }
-            private set { }
-        }
+    public int Port
+    {
+        get { return _port; }
+        private set { }
+    }
 
-        /// <summary>
-        /// Construct server with given port, path ,controller and buffer.
-        /// </summary>
-        /// <param name="path">伺服器 root 的實體路徑</param>
-        /// <param name="port">Port 開放 http 訪問的 port</param>
-        /// <param name="mc">處理方法的控制器，邏輯類似 ASP MVC</param>
-        public SimpleHTTPServer(string path, int port, System.Object mc, int buffer)
-        {
-            this._methodController = mc;
-            this.Initialize(path, port);
-        }
+    /// <summary>
+    /// Construct server with given port, path ,controller and buffer.
+    /// </summary>
+    /// <param name="path">The root folder path in your computer (Absolute path)</param>
+    /// <param name="port">The port for your http server</param>
+    /// <param name="controller">The controller instance for the WebAPI</param>
+    /// <param name="buffer">The buffer size for the http response</param>
+    public SimpleHTTPServer(string path, int port, System.Object controller, int buffer)
+    {
+        this._methodController = controller;
+        this.Initialize(path, port);
+    }
 
-        /// <summary>
-        /// Construct server with given port, path and buffer.
-        /// </summary>
-        /// <param name="path">伺服器 root 的實體路徑</param>
-        /// <param name="port">Port 開放 http 訪問的 port</param>
-        public SimpleHTTPServer(string path, int port, int buffer)
-        {
-            bufferSize = buffer;
-            this.Initialize(path, port);
-        }
+    /// <summary>
+    /// Construct server with given port, path and buffer.
+    /// </summary>
+    /// <param name="path">The root folder path in your computer (Absolute path)</param>
+    /// <param name="port">The port for your http server</param>
+    /// <param name="buffer">The buffer size for the http response</param>
+    public SimpleHTTPServer(string path, int port, int buffer)
+    {
+        bufferSize = buffer;
+        this.Initialize(path, port);
+    }
 
-        /// <summary>
-        /// Stop Server
-        /// </summary>
-        public void Stop()
-        {
-            _serverThread.Abort();
-            _listener.Stop();
-        }
+    /// <summary>
+    /// Stop Server
+    /// </summary>
+    public void Stop()
+    {
+        _serverThread.Abort();
+        _listener.Stop();
+    }
 
-        private void Listen()
+    private void Listen()
+    {
+        _listener = new HttpListener();
+        _listener.Prefixes.Add("http://*:" + _port.ToString() + "/");
+        _listener.Start();
+        while (true)
         {
-            _listener = new HttpListener();
-            _listener.Prefixes.Add("http://*:" + _port.ToString() + "/");
-            _listener.Start();
-            while (true)
+            try
             {
-                try
+                HttpListenerContext context = _listener.GetContext();
+                Process(context);
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.Log(ex);
+            }
+        }
+    }
+
+    private void Process(HttpListenerContext context)
+    {
+        string filename = context.Request.Url.AbsolutePath;
+        filename = filename.Substring(1);
+
+        if (string.IsNullOrEmpty(filename))
+        {
+            foreach (string indexFile in _indexFiles)
+            {
+                if (File.Exists(Path.Combine(_rootDirectory, indexFile)))
                 {
-                    HttpListenerContext context = _listener.GetContext();
-                    Process(context);
-                }
-                catch (Exception ex)
-                {
-                   UnityEngine. Debug.Log(ex);
+                    filename = indexFile;
+                    break;
                 }
             }
         }
 
-        private void Process(HttpListenerContext context)
+        filename = Path.Combine(_rootDirectory, filename);
+
+        Dictionary<string, object> namedParameters = new Dictionary<string, object>();
+        if (!string.IsNullOrEmpty(context.Request.Url.Query))
         {
-            string filename = context.Request.Url.AbsolutePath;
-            filename = filename.Substring(1);
-
-            if (string.IsNullOrEmpty(filename))
+            UnityEngine.Debug.Log(context.Request.Url.Query);
+            var query = context.Request.Url.Query.Replace("?", "").Split('&');
+            foreach (var item in query)
             {
-                foreach (string indexFile in _indexFiles)
-                {
-                    if (File.Exists(Path.Combine(_rootDirectory, indexFile)))
-                    {
-                        filename = indexFile;
-                        break;
-                    }
-                }
+                var t = item.Split('=');
+
+
+                namedParameters.Add(t[0], t[1]);
             }
+        }
 
-            filename = Path.Combine(_rootDirectory, filename);
+        var method = TryParseToController(context.Request.Url);
 
-            Dictionary<string, object> namedParameters = new Dictionary<string, object>();
-            if (!string.IsNullOrEmpty(context.Request.Url.Query))
+        if (File.Exists(filename))
+        {
+            try
             {
-                UnityEngine.Debug.Log(context.Request.Url.Query);
-                var query = context.Request.Url.Query.Replace("?", "").Split('&');
-                foreach (var item in query)
-                {
-                    var t = item.Split('=');
+                context.Response.StatusCode = (int)HttpStatusCode.OK;
+                Stream input = new FileStream(filename, FileMode.Open);
 
+                //Adding permanent http response headers
+                string mime;
+                context.Response.ContentType = _mimeTypeMappings.TryGetValue(Path.GetExtension(filename), out mime) ? mime : "application/octet-stream";
+                context.Response.ContentLength64 = input.Length;
+                context.Response.AddHeader("Date", DateTime.Now.ToString("r"));
+                context.Response.AddHeader("Last-Modified", System.IO.File.GetLastWriteTime(filename).ToString("r"));
 
-                    namedParameters.Add(t[0], t[1]);
-                }
-            }
-
-            var method = TryParseToController(context.Request.Url);
-
-            if (File.Exists(filename))
-            {
-                try
-                {
-                    context.Response.StatusCode = (int)HttpStatusCode.OK;
-                    Stream input = new FileStream(filename, FileMode.Open);
-
-                    //Adding permanent http response headers
-                    string mime;
-                    context.Response.ContentType = _mimeTypeMappings.TryGetValue(Path.GetExtension(filename), out mime) ? mime : "application/octet-stream";
-                    context.Response.ContentLength64 = input.Length;
-                    context.Response.AddHeader("Date", DateTime.Now.ToString("r"));
-                    context.Response.AddHeader("Last-Modified", System.IO.File.GetLastWriteTime(filename).ToString("r"));
-
-                    byte[] buffer = new byte[1024 * bufferSize];
-                    int nbytes;
-                    while ((nbytes = input.Read(buffer, 0, buffer.Length)) > 0)
-                        context.Response.OutputStream.Write(buffer, 0, nbytes);
-                    input.Close();
-
-
-                    context.Response.OutputStream.Flush();
-                }
-                catch (Exception ex)
-                {
-                    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                    UnityEngine.Debug.Log(ex);
-                }
-
-            }
-            //A ASP.Net MVC like controller route
-            else if (method != null)
-            {
-                context.Response.ContentType = "application/json";
-
-                object result;
-                result = method.InvokeWithNamedParameters(_methodController, namedParameters);
-if(result == null){
-result = new VoidResult {msg ="Success"};
-}
-#if UseLitJson
-                string jsonString = LitJson.JsonMapper.ToJson(result);
-#else
-				string jsonString = JsonUtility.ToJson(result);
-#endif
-                byte[] jsonByte = Encoding.UTF8.GetBytes(jsonString);
-                Stream jsonStream = new MemoryStream(jsonByte);
                 byte[] buffer = new byte[1024 * bufferSize];
                 int nbytes;
-                while ((nbytes = jsonStream.Read(buffer, 0, buffer.Length)) > 0)
+                while ((nbytes = input.Read(buffer, 0, buffer.Length)) > 0)
                     context.Response.OutputStream.Write(buffer, 0, nbytes);
-                jsonStream.Close();
-                context.Response.OutputStream.Flush();
+                input.Close();
+
+            }
+            catch (Exception ex)
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                UnityEngine.Debug.LogError(ex);
+                context.Response.StatusDescription = ex.Message;
+            }
+        }
+        //A ASP.Net MVC like controller route
+        else if (method != null)
+        {
+            context.Response.ContentType = "application/json";
+
+            object result = null;
+            try
+            {
+                result = method.InvokeWithNamedParameters(_methodController, namedParameters);
+            }
+            catch (Exception ex)
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                UnityEngine.Debug.LogError(ex);
+                context.Response.StatusDescription = ex.Message;
+                goto WebResponse;
+            }
+            if (result == null)
+            {
+                result = new VoidResult { msg = "Success" };
+            }
+            string jsonString = "";
+            if (OnJsonSerialized == null)
+            {
+                UnityEngine.Debug.LogError("There is no JsonSerialize delegate regist on SimpleHTTPServer.OnJsonSerialized");
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                context.Response.StatusDescription = "There is no JsonSerialize delegate regist on SimpleHTTPServer.OnJsonSerialized";
+                goto WebResponse;
             }
             else
             {
-                context.Response.StatusCode = (int)HttpStatusCode.NotFound;
+                jsonString = OnJsonSerialized.Invoke(result);
             }
-
-            context.Response.OutputStream.Close();
+            byte[] jsonByte = Encoding.UTF8.GetBytes(jsonString);
+            Stream jsonStream = new MemoryStream(jsonByte);
+            byte[] buffer = new byte[1024 * bufferSize];
+            int nbytes;
+            while ((nbytes = jsonStream.Read(buffer, 0, buffer.Length)) > 0)
+                context.Response.OutputStream.Write(buffer, 0, nbytes);
+            jsonStream.Close();
         }
-
-        private void Initialize(string path, int port)
+        else
         {
-            this._rootDirectory = path;
-            this._port = port;
-            _serverThread = new Thread(this.Listen);
-            _serverThread.Start();
+            context.Response.StatusCode = (int)HttpStatusCode.NotFound;
         }
-
-        System.Reflection.MethodInfo TryParseToController(Uri uri)
-        {
-            string methodName = uri.Segments[1].Replace("/", "");
-            System.Reflection.MethodInfo method = null;
-            try
-            {
-                method = _methodController.GetType().GetMethod(methodName);
-            }
-            catch
-            {
-                method = null;
-            }
-
-            return method;
-        }
-
-        class  VoidResult{
-            public string msg;
-        }
+    WebResponse:
+        context.Response.OutputStream.Flush();
+        context.Response.OutputStream.Close();
     }
+
+    private void Initialize(string path, int port)
+    {
+        this._rootDirectory = path;
+        this._port = port;
+        _serverThread = new Thread(this.Listen);
+        _serverThread.Start();
+    }
+
+    System.Reflection.MethodInfo TryParseToController(Uri uri)
+    {
+        string methodName = uri.Segments[1].Replace("/", "");
+        System.Reflection.MethodInfo method = null;
+        try
+        {
+            method = _methodController.GetType().GetMethod(methodName);
+        }
+        catch
+        {
+            method = null;
+        }
+
+        return method;
+    }
+
+    //Mark as Serializable to make Unity's JsonUtility works.
+    [System.Serializable]
+    class VoidResult
+    {
+        public string msg;
+    }
+}
 
 //MethodInfo 可使用具名變數的擴充方法
 public static class ReflectionExtensions
