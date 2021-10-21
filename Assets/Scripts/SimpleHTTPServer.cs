@@ -13,6 +13,54 @@ using System.Reflection;
 
 public class SimpleHTTPServer
 {
+    const string default404Page = @"
+<head>
+<style>*{
+    transition: all 0.6s;
+}
+
+html {
+    height: 100%;
+}
+
+body{
+    font-family: 'Lato', sans-serif;
+    color: #888;
+    margin: 0;
+}
+
+#main{
+    display: table;
+    width: 100%;
+    height: 100vh;
+    text-align: center;
+}
+
+.fof{
+	  display: table-cell;
+	  vertical-align: middle;
+}
+
+.fof h1{
+	  font-size: 50px;
+	  display: inline-block;
+	  padding-right: 12px;
+	  animation: type .5s alternate infinite;
+}
+
+@keyframes type{
+	  from{box-shadow: inset -3px 0px 0px #888;}
+	  to{box-shadow: inset -3px 0px 0px transparent;}
+}</style>
+</head>
+<body>
+    <div id='main'>
+    <div class='fof'>
+        <h1>Error 404</h1>
+    </div>
+    </div>
+</body>
+";
 
     public Func<object, string> OnJsonSerialized;
     static int bufferSize = 16;
@@ -197,31 +245,7 @@ public class SimpleHTTPServer
 
         if (File.Exists(filename))
         {
-            try
-            {
-                context.Response.StatusCode = (int)HttpStatusCode.OK;
-                Stream input = new FileStream(filename, FileMode.Open);
-
-                //Adding permanent http response headers
-                string mime;
-                context.Response.ContentType = _mimeTypeMappings.TryGetValue(Path.GetExtension(filename), out mime) ? mime : "application/octet-stream";
-                context.Response.ContentLength64 = input.Length;
-                context.Response.AddHeader("Date", DateTime.Now.ToString("r"));
-                context.Response.AddHeader("Last-Modified", System.IO.File.GetLastWriteTime(filename).ToString("r"));
-
-                byte[] buffer = new byte[1024 * bufferSize];
-                int nbytes;
-                while ((nbytes = input.Read(buffer, 0, buffer.Length)) > 0)
-                    context.Response.OutputStream.Write(buffer, 0, nbytes);
-                input.Close();
-
-            }
-            catch (Exception ex)
-            {
-                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                UnityEngine.Debug.LogError(ex);
-                context.Response.StatusDescription = ex.Message;
-            }
+            TryServeFile();
         }
         //A ASP.Net MVC like controller route
         else if (method != null)
@@ -256,7 +280,9 @@ public class SimpleHTTPServer
             {
                 jsonString = OnJsonSerialized.Invoke(result);
             }
+
             byte[] jsonByte = Encoding.UTF8.GetBytes(jsonString);
+            context.Response.ContentLength64 = jsonByte.Length;
             Stream jsonStream = new MemoryStream(jsonByte);
             byte[] buffer = new byte[1024 * bufferSize];
             int nbytes;
@@ -266,11 +292,53 @@ public class SimpleHTTPServer
         }
         else
         {
+            byte[] resultByte = Encoding.UTF8.GetBytes(default404Page);
+            Stream resultStream = new MemoryStream(resultByte);
             context.Response.StatusCode = (int)HttpStatusCode.NotFound;
+            context.Response.ContentType = "text/html";
+            context.Response.ContentLength64 = resultByte.Length;
+            context.Response.AddHeader("Date", DateTime.Now.ToString("r"));
+            context.Response.AddHeader("Last-Modified", System.IO.File.GetLastWriteTime(filename).ToString("r"));
+
+            byte[] buffer = new byte[1024 * bufferSize];
+            int nbytes;
+            while ((nbytes = resultStream.Read(buffer, 0, buffer.Length)) > 0)
+                context.Response.OutputStream.Write(buffer, 0, nbytes);
+            resultStream.Close();
+
         }
     WebResponse:
         context.Response.OutputStream.Flush();
         context.Response.OutputStream.Close();
+
+        void TryServeFile()
+        {
+            try
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.OK;
+                Stream input = new FileStream(filename, FileMode.Open);
+
+                //Adding permanent http response headers
+                string mime;
+                context.Response.ContentType = _mimeTypeMappings.TryGetValue(Path.GetExtension(filename), out mime) ? mime : "application/octet-stream";
+                context.Response.ContentLength64 = input.Length;
+                context.Response.AddHeader("Date", DateTime.Now.ToString("r"));
+                context.Response.AddHeader("Last-Modified", System.IO.File.GetLastWriteTime(filename).ToString("r"));
+
+                byte[] buffer = new byte[1024 * bufferSize];
+                int nbytes;
+                while ((nbytes = input.Read(buffer, 0, buffer.Length)) > 0)
+                    context.Response.OutputStream.Write(buffer, 0, nbytes);
+                input.Close();
+
+            }
+            catch (Exception ex)
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                UnityEngine.Debug.LogError(ex);
+                context.Response.StatusDescription = ex.Message;
+            }
+        }
     }
 
     private void Initialize(string path, int port)
@@ -283,6 +351,10 @@ public class SimpleHTTPServer
 
     System.Reflection.MethodInfo TryParseToController(Uri uri)
     {
+        if (uri.Segments.Length <= 1)
+        {
+            return null;
+        }
         string methodName = uri.Segments[1].Replace("/", "");
         System.Reflection.MethodInfo method = null;
         try
