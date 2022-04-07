@@ -316,7 +316,7 @@ body{
             try
             {
                 context.Response.StatusCode = (int)HttpStatusCode.OK;
-                Stream input = new FileStream(filename, FileMode.Open);
+                Stream input = new FileStream(filename, FileMode.Open, FileAccess.Read);
 
                 //Adding permanent http response headers
                 string mime;
