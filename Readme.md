@@ -11,7 +11,7 @@ UnityHTTPServer is a simple C# http server implementation works under Unity3D.
 ## Supported Platform
 ------
 - OSX Editor
-- OSX Player (Not test yet, in theory)
+- OSX Player
 - Windows Editor
 - Windows Player
 - others is waiting for test
