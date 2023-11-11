@@ -165,6 +165,7 @@ body{
     public SimpleHTTPServer(string path, int port, System.Object controller, int buffer)
     {
         this._methodController = controller;
+	bufferSize = buffer;
         this.Initialize(path, port);
     }
 
